@@ -127,6 +127,32 @@ async def pipe_websocket_to_process(websocket, process, target):
         if not process.stdin.closed:
             process.stdin.close()
 
+def format_and_log_tool_list(data, target):
+    """Parses a JSON-RPC response and, if it's a tool list, logs it in a formatted way."""
+    try:
+        response = json.loads(data)
+        tools = []
+        # Handle responses where the result itself is the list of tools
+        if 'result' in response and isinstance(response.get('result'), list):
+            tools = response['result']
+        # Handle responses where the tool list is nested under 'tools'
+        elif 'result' in response and isinstance(response.get('result'), dict) and isinstance(response['result'].get('tools'), list):
+            tools = response['result']['tools']
+
+        # If we found a list of tools, format and print them
+        if tools and all(isinstance(t, dict) and 'name' in t for t in tools):
+            logger.info(f"🟢 {target} - Ready ({len(tools)} tools)")
+            logger.info("  Tools:")
+            # Sort tools alphabetically by name for consistent output
+            for tool in sorted(tools, key=lambda x: x.get('name', '')):
+                logger.info(f"  - {tool['name']}")
+            return
+    except (json.JSONDecodeError, TypeError):
+        # Not a parsable tool list, fall through to log raw data
+        pass
+    # If it's not a tool list or parsing fails, log the raw message
+    logger.info(f"[{target}] >> {data.strip()}")
+
 async def pipe_process_to_websocket(process, websocket, target):
     """Read data from process stdout and send to WebSocket"""
     try:
@@ -138,9 +164,8 @@ async def pipe_process_to_websocket(process, websocket, target):
                 logger.info(f"[{target}] Process has ended output")
                 break
                 
-            # Send data to WebSocket
-            logger.debug(f"[{target}] >> {data[:120]}...")
-            # In text mode, data is already a string, no need to decode
+            # Format and log the response, then send to WebSocket
+            format_and_log_tool_list(data, target)
             await websocket.send(data)
     except Exception as e:
         logger.error(f"[{target}] Error in process to WebSocket pipe: {e}")
@@ -245,8 +270,23 @@ if __name__ == "__main__":
     
     # Get token from environment variable or command line arguments
     endpoint_url = os.environ.get('MCP_ENDPOINT')
+
+    # If not in env, try to load from mcp.cfg
     if not endpoint_url:
-        logger.error("Please set the `MCP_ENDPOINT` environment variable")
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+            config_path = os.path.join(os.getcwd(), 'mcp.cfg')
+            if os.path.exists(config_path):
+                config.read(config_path)
+                if 'mcp' in config and 'MCP_ENDPOINT' in config['mcp']:
+                    endpoint_url = config['mcp']['MCP_ENDPOINT']
+                    logger.info("Loaded MCP_ENDPOINT from mcp.cfg")
+        except Exception as e:
+            logger.warning(f"Could not read mcp.cfg: {e}")
+
+    if not endpoint_url:
+        logger.error("Please set the `MCP_ENDPOINT` environment variable or add it to the [mcp] section of mcp.cfg")
         sys.exit(1)
     
     # Determine target: default to all if no arg; single target otherwise
