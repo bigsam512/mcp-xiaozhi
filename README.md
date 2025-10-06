@@ -1,3 +1,15 @@
+# 我的修改
+
+## mcp\_pipe.py
+
+从mcp.cfg获取`MCP_ENDPOINT`
+
+## mcp\_config.json
+
+在这里可以增加其他mcp工具，但`mcp_pipe.py`好像缺少上下文信息，因此装上playwright-mcp后，小智非要安装浏览器(其实已经装好了)，只好直接修改`@playwright/mcp/node_modules/playwright/lib/mcp/browser/tools.js`删除`...import_install.default,`行。
+
+
+
 # MCP Sample Project | MCP 示例项目
 
 A powerful interface for extending AI capabilities through remote control, calculations, email operations, knowledge search, and more.
