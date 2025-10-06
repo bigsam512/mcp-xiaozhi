@@ -8,7 +8,9 @@
 
 在这里可以增加其他mcp工具，但`mcp_pipe.py`好像缺少上下文信息，因此装上playwright-mcp后，小智非要安装浏览器(其实已经装好了)，只好直接修改`@playwright/mcp/node_modules/playwright/lib/mcp/browser/tools.js`删除`...import_install.default,`行。
 
+## calculator.py
 
+作为初步测试，增加了个算24的功能。`mcp_pipe.py`后台可以看到计算正确，小智无法用语音念出算式，需要研究为什么。
 
 # MCP Sample Project | MCP 示例项目
 
