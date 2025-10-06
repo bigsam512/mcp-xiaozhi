@@ -5,6 +5,21 @@
       "command": "python",
       "args": ["-m", "calculator"]
     },
+    "playwright": {
+      "command": "/home/sam/.nvm/versions/node/v22.14.0/bin/mcp-server-playwright",
+      "args": [
+        "--executable-path",
+        "/usr/bin/chromium",
+        "--user-data-dir",
+        "/home/sam/.config/chromium"
+      ]
+    },
+    "fetch": {
+      "command": "mcp-fetch-server",
+      "env": {
+        "DEFAULT_LIMIT": "50000"
+      }
+    },
     "remote-sse-server": {
       "type": "sse",
       "url": "https://api.example.com/sse",
