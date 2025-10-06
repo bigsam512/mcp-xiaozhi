@@ -2,7 +2,7 @@
 
 ## mcp\_pipe.py
 
-从mcp.cfg获取`MCP_ENDPOINT`
+从mcp.cfg获取`MCP_ENDPOINT`(从[小智官方后台](https://xiaozhi.me/console/agents)获取)
 
 ## mcp\_config.json
 
