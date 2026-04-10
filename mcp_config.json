@@ -1,34 +1,25 @@
 {
   "mcpServers": {
+    "local-stdio-game24": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "game24"]
+    },
     "local-stdio-calculator": {
       "type": "stdio",
       "command": "python",
       "args": ["-m", "calculator"]
     },
-    "playwright": {
-      "command": "mcp-server-playwright",
-      "args": [
-        "--executable-path",
-        "/usr/bin/chromium",
-        "--user-data-dir",
-        "/home/sam/.config/chromium"
-      ]
+    "local-stdio-words": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "words"]
     },
     "fetch": {
       "command": "mcp-fetch-server",
       "env": {
         "DEFAULT_LIMIT": "50000"
       }
-    },
-    "remote-sse-server": {
-      "type": "sse",
-      "url": "https://api.example.com/sse",
-      "disabled": true
-    },
-    "remote-http-server": {
-      "type": "http",
-      "url": "https://api.example.com/mcp",
-      "disabled": true
     }
   }
 }
