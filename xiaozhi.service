@@ -1,0 +1,16 @@
+[Unit]
+Description=Xiaozhi MCP Pipe Service (Shell Activation Method)
+After=network.target
+
+[Service]
+User=sam
+Group=sam
+WorkingDirectory=/home/sam/mygit/mcp-xiaozhi
+# Note: Sourcing activate is not the standard systemd approach, but is used here by request.
+# The 'exec' is important to ensure systemd tracks the correct process.
+ExecStart=/bin/bash -c 'source /home/sam/.venv/bin/activate && . /home/sam/.nvm/nvm.sh && export http_proxy="http://127.0.0.1:7890" && export https_proxy="http://127.0.0.1:7890" && exec /home/sam/.venv/bin/python3 /home/sam/mygit/mcp-xiaozhi/mcp_pipe.py'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

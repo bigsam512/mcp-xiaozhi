@@ -15,6 +15,16 @@
       "command": "python",
       "args": ["-m", "words"]
     },
+    "local-stdio-webread": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "webread"]
+    },
+    "local-stdio-tavily": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "tavily"]
+    },
     "fetch": {
       "command": "mcp-fetch-server",
       "env": {
