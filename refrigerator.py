@@ -76,7 +76,7 @@ def _parse_items(managed_text: str) -> list[dict]:
     """把管理区域每一行解析成 dict。
 
     每行格式：
-    - 名称：牛奶 | 数量：5袋 | 位置：中间夹层 | 放入时间：2026-07-10 15:40 | 过期时间：2026-07-20
+    - 名称：牛奶 | 数量：5 | 单位：袋 | 位置：中间夹层 | 放入时间：2026-07-10 15:40 | 过期时间：2026-07-20
     """
     items: list[dict] = []
     for line in managed_text.splitlines():
@@ -94,9 +94,15 @@ def _parse_items(managed_text: str) -> list[dict]:
             else:
                 continue
             fields[k.strip()] = v.strip()
+        qty_raw = fields.get("数量", "").strip()
+        try:
+            qty = int(qty_raw) if qty_raw else 1
+        except ValueError:
+            qty = 1
         item = {
             "name": fields.get("名称", ""),
-            "quantity": fields.get("数量", ""),
+            "quantity": qty,
+            "unit": fields.get("单位", ""),
             "location": fields.get("位置", ""),
             "added": fields.get("放入时间", ""),
             "expiry": fields.get("过期时间", ""),
@@ -107,9 +113,12 @@ def _parse_items(managed_text: str) -> list[dict]:
 
 
 def _format_item(item: dict) -> str:
-    parts = [f"名称：{item['name']}"]
-    if item.get("quantity"):
-        parts.append(f"数量：{item['quantity']}")
+    qty = item.get("quantity", 1)
+    parts = [
+        f"名称：{item['name']}",
+        f"数量：{qty}",
+        f"单位：{item.get('unit', '')}",
+    ]
     if item.get("location"):
         parts.append(f"位置：{item['location']}")
     if item.get("added"):
@@ -198,6 +207,53 @@ def _parse_date(s: str) -> Optional[date]:
 
 
 # --------------------------------------------------------------------------- #
+# 数量（含中文量词）解析与加减
+# --------------------------------------------------------------------------- #
+_CN_DIGIT = {
+    "零": 0, "一": 1, "两": 2, "二": 2, "三": 3, "四": 4,
+    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+}
+# 常见量词
+UNITS = "盒袋包个块条瓶罐只斤克升颗粒根片张份桶提排枚棵头尾朵串瓣盘碗杯"
+
+
+def _cn_to_int(s: str) -> Optional[int]:
+    """把阿拉伯数字或简单中文数字（支持到 99）转成 int。"""
+    s = s.strip()
+    if not s:
+        return None
+    if s.isdigit():
+        return int(s)
+    if s == "十":
+        return 10
+    if "十" in s:
+        left, _, right = s.partition("十")
+        tens = _CN_DIGIT.get(left, 1) if left else 1
+        ones = _CN_DIGIT.get(right, 0) if right else 0
+        return tens * 10 + ones
+    if s in _CN_DIGIT:
+        return _CN_DIGIT[s]
+    return None
+
+
+def _parse_quantity(q: str) -> tuple[Optional[int], str]:
+    """把数量描述拆成 (数值, 量词)。
+
+    例：“五袋” -> (5, “袋”)；“10个” -> (10, “个”)；
+    无法解析则返回 (None, 原串)。
+    """
+    q = (q or "").strip()
+    if not q:
+        return None, ""
+    m = re.match(r"^\s*(\d+|[零一两二三四五六七八九十]+)\s*(.*)$", q)
+    if not m:
+        return None, q
+    num = _cn_to_int(m.group(1))
+    unit = m.group(2).strip()
+    return num, unit
+
+
+# --------------------------------------------------------------------------- #
 # MCP 工具
 # --------------------------------------------------------------------------- #
 @mcp.tool()
@@ -226,31 +282,63 @@ def get_refrigerator() -> dict:
 @mcp.tool()
 def add_item(
     name: str,
-    quantity: str = "",
+    quantity: int = 1,
+    unit: str = "",
     location: str = "",
     expiry: str = "",
 ) -> dict:
     """往冰箱里放入一样东西，自动记录放入时间。
 
     :param name: 东西的名称，例如“牛奶”“三文鱼”。必填。
-    :param quantity: 数量描述，例如“5袋”“两块”。可选。
-    :param location: 存放位置，例如“中间夹层”“左侧下最下抽屉”。可选。
+    :param quantity: 数量，纯数字，例如 5。1。默认 1。
+    :param unit: 单位，例如“袋”“盒”“个”。可选。
+    :param location: 存放位置，例如“中间夹层”。可选。
     :param expiry: 过期时间，例如“2026-07-20”。可选，可稍后用 set_expiry 补录。
 
+    如果同名同位置的东西已经在冰箱里，则在原数量上累加。
     放入时间由服务器按当前时间自动填写，无需传入。
     """
     name = (name or "").strip()
     if not name:
         return {"success": False, "error": "name 不能为空。"}
+    try:
+        quantity = int(quantity)
+    except (ValueError, TypeError):
+        quantity = 1
+    if quantity < 1:
+        quantity = 1
+    unit = (unit or "").strip()
 
     content = _read_file()
     head, managed = _split_content(content)
     items = _parse_items(managed)
 
     now = _now_str()
+    # 同名同位置（且单位一致）则累加数量
+    merged = None
+    for it in items:
+        if it["name"] == name and it.get("unit", "") == unit and (
+            not location.strip() or it.get("location", "") == location.strip()
+        ):
+            merged = it
+            break
+    if merged is not None:
+        merged["quantity"] = merged.get("quantity", 0) + quantity
+        merged["added"] = now
+        if expiry.strip():
+            merged["expiry"] = expiry.strip()
+        _save_items(head, items)
+        logger.info(f"add_item(merge): {name} +{quantity} -> {merged['quantity']}")
+        return {
+            "success": True,
+            "message": f"已增加“{name}”{quantity}{unit}，现有 {merged['quantity']}{unit}。",
+            "item": merged,
+        }
+
     new_item = {
         "name": name,
-        "quantity": quantity.strip(),
+        "quantity": quantity,
+        "unit": unit,
         "location": location.strip(),
         "added": now,
         "expiry": expiry.strip(),
@@ -258,11 +346,11 @@ def add_item(
     items.append(new_item)
     _save_items(head, items)
 
-    logger.info(f"add_item: {name} added at {now}")
+    logger.info(f"add_item: {name} x{quantity}{unit} added at {now}")
     tail = "" if expiry.strip() else " 尚未记录过期时间，可以告诉我它什么时候过期。"
     return {
         "success": True,
-        "message": f"已放入“{name}”，放入时间 {now}。" + tail,
+        "message": f"已放入“{name}”{quantity}{unit}，放入时间 {now}。" + tail,
         "item": new_item,
     }
 
@@ -306,18 +394,25 @@ def set_expiry(name: str, expiry: str) -> dict:
 
 
 @mcp.tool()
-def remove_item(name: str, quantity: str = "") -> dict:
+def remove_item(name: str, quantity: int = 0) -> dict:
     """从冰箱里取出一样东西。
 
     :param name: 东西的名称（支持部分匹配）。必填。
-    :param quantity: 可选，取出的数量描述。若留空，则整条记录删除。
+    :param quantity: 取出的数量，纯数字。留空或 0 表示全部取出（删除整条）；
+        若数量小于库存，则扣减后保留剩余；若大于等于库存，则整条删除。
 
-    只影响由小智管理的记录。若管理记录里没有该物品，会尝试从手动清点的
-    基准库存（文件上半部分）中删除对应词条。若有多件同名，默认取出最近放入的一件。
+    若有多件同名，默认取出最近放入的一件。若管理记录里没有该物品，
+    会尝试从手动清点的基准库存（若存在）中删除对应词条。
     """
     name = (name or "").strip()
     if not name:
         return {"success": False, "error": "name 不能为空。"}
+    try:
+        quantity = int(quantity)
+    except (ValueError, TypeError):
+        quantity = 0
+    if quantity < 0:
+        quantity = 0
 
     content = _read_file()
     head, managed = _split_content(content)
@@ -325,7 +420,7 @@ def remove_item(name: str, quantity: str = "") -> dict:
 
     matches = [i for i, it in enumerate(items) if name in it["name"]]
     if not matches:
-        # 管理记录里没有，尝试从基准库存（你手动清点的原有物品）删除
+        # 管理记录里没有，尝试从基准库存删除
         new_head, removed_tokens = _remove_from_baseline(head, name)
         if removed_tokens:
             _save_items(new_head, items)
@@ -340,23 +435,27 @@ def remove_item(name: str, quantity: str = "") -> dict:
         return {"success": False, "error": f"冰箱里没有找到“{name}”。"}
 
     idx = matches[-1]
-    removed = items[idx]
-    quantity = quantity.strip()
-    if quantity:
-        # 只更新数量描述，不删除整条
-        old_q = removed.get("quantity", "")
-        removed["quantity"] = (
-            f"取出{quantity}后剩余（原：{old_q}）" if old_q else f"取出{quantity}"
-        )
-        _save_items(head, items)
-        msg = f"已记录从冰箱取出“{removed['name']}”{quantity}。"
-    else:
+    item = items[idx]
+    unit = item.get("unit", "")
+    have = item.get("quantity", 1)
+
+    if quantity == 0 or quantity >= have:
+        # 全部取出，删除整条
         items.pop(idx)
         _save_items(head, items)
-        msg = f"已从管理记录中取出（删除）“{removed['name']}”。"
+        if quantity > have:
+            msg = f"“{item['name']}”只有 {have}{unit}，已全部取出。"
+        else:
+            msg = f"已取出“{item['name']}”{have}{unit}（已取完）。"
+        logger.info(f"remove_item: {item['name']} all ({have})")
+        return {"success": True, "message": msg, "item": item, "remaining": 0}
 
-    logger.info(f"remove_item: {removed['name']} quantity={quantity or 'ALL'}")
-    return {"success": True, "message": msg, "item": removed}
+    # 部分取出，真正做减法
+    item["quantity"] = have - quantity
+    _save_items(head, items)
+    msg = f"已取出“{item['name']}”{quantity}{unit}，剩余 {item['quantity']}{unit}。"
+    logger.info(f"remove_item: {item['name']} -{quantity} -> {item['quantity']}")
+    return {"success": True, "message": msg, "item": item, "remaining": item["quantity"]}
 
 
 @mcp.tool()
