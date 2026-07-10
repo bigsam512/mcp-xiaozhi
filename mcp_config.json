@@ -25,6 +25,11 @@
       "command": "python",
       "args": ["-m", "refrigerator"]
     },
+    "local-stdio-study-english": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "study_english"]
+    },
     "local-stdio-tavily": {
       "type": "stdio",
       "command": "python",

@@ -1,5 +1,12 @@
 # 我的修改
 
+## 小智相关链接 | Xiaozhi Links
+
+- 主站：<https://xiaozhi.me>
+- 官方后台（获取 `MCP_ENDPOINT`）：<https://xiaozhi.me/console/agents>
+- GitHub（xiaozhi-esp32）：<https://github.com/78/xiaozhi-esp32>
+- Wiki（飞书）：<https://my.feishu.cn/wiki/F5krwD16viZoF0kKkvDcrZNYnhb>
+
 ## mcp\_pipe.py
 
 从mcp.cfg获取`MCP_ENDPOINT`(从[小智官方后台](https://xiaozhi.me/console/agents)获取)
