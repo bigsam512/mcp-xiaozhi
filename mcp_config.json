@@ -20,6 +20,11 @@
       "command": "python",
       "args": ["-m", "webread"]
     },
+    "local-stdio-refrigerator": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "refrigerator"]
+    },
     "local-stdio-tavily": {
       "type": "stdio",
       "command": "python",
